@@ -1,70 +1,95 @@
 import { useState, useEffect } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://sistemas-encuestas-tatiana.onrender.com/api';
 
 export default function App() {
   const [encuestas, setEncuestas] = useState([]);
   const [respuestas, setRespuestas] = useState({});
   const [cargando, setCargando] = useState(true);
   const [enviado, setEnviado] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetch(`${API_URL}/encuesta`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Error al conectar con la API');
+        return res.json();
+      })
       .then((data) => {
         setEncuestas(data);
         setCargando(false);
       })
-      .catch((err) => console.error('Error cargando encuestas:', err));
+      .catch((err) => {
+        console.error('Error cargando encuestas:', err);
+        setError('No se pudo conectar con el servidor backend.');
+        setCargando(false);
+      });
   }, []);
 
-  const SeleccionarOpcion = (preguntaId, opcionId) => {
+  const seleccionarOpcion = (preguntaId, opcionId) => {
     setRespuestas((prev) => ({ ...prev, [preguntaId]: opcionId }));
   };
 
-  const EnviarVotos = async () => {
-    let ultimosDatos = encuestas;
-    for (const [preguntaId, opcionId] of Object.entries(respuestas)) {
-      const res = await fetch(`${API_URL}/votar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preguntaId: Number(preguntaId), opcionId }),
-      });
-      ultimosDatos = await res.json();
+  const enviarVotos = async () => {
+    try {
+      let ultimosDatos = encuestas;
+      for (const [preguntaId, opcionId] of Object.entries(respuestas)) {
+        const res = await fetch(`${API_URL}/votar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preguntaId: Number(preguntaId), opcionId }),
+        });
+        ultimosDatos = await res.json();
+      }
+      setEncuestas(ultimosDatos);
+      setEnviado(true);
+    } catch (err) {
+      console.error('Error al enviar votos:', err);
+      alert('Hubo un error al guardar tus respuestas.');
     }
-    setEncuestas(ultimosDatos);
-    setEnviado(true);
   };
 
   if (cargando) {
     return (
-      <div className="container center">
+      <div className="center">
         <div className="spinner"></div>
-        <p>Cargando sistema de encuestas...</p>
+        <p style={{ marginTop: '1rem', color: '#94a3b8' }}>Cargando sistema de encuestas...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="center">
+        <div className="survey-card" style={{ textAlign: 'center' }}>
+          <h2>⚠️ Algo salió mal</h2>
+          <p className="subtitle">{error}</p>
+          <button className="submit-btn" onClick={() => window.location.reload()}>
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="app-layout">
-      {/* Header profesional */}
+      {/* Encabezado Principal */}
       <header className="header">
         <div className="header-content">
-          <span className="badge">Plataforma Interactiva</span>
-          <h1>Sistema de Encuestas Full Stack</h1>
-          <p>
-            Encuesta académica sobre tecnologías web y herramientas de desarrollo.
-          </p>
+          <span className="badge">Plataforma Interactiva Full Stack</span>
+          <h1>Encuesta de Tecnologías Web</h1>
+          <p>Plataforma para medir preferencias en herramientas de desarrollo.</p>
         </div>
       </header>
 
-      {/* Contenido principal */}
+      {/* Contenido / Tarjeta de Preguntas */}
       <main className="main-content">
         {!enviado ? (
           <div className="survey-card">
             <h2>Cuestionario Técnico</h2>
             <p className="subtitle">
-              Responde a las siguientes preguntas y consulta los resultados globales.
+              Selecciona una opción para cada pregunta para enviar tus respuestas.
             </p>
 
             {encuestas.map((enc, idx) => (
@@ -74,13 +99,13 @@ export default function App() {
                 </p>
                 <div className="options-grid">
                   {enc.opciones.map((opt) => {
-                    constisSelected = respuestas[enc.id] === opt.id;
+                    const isSelected = respuestas[enc.id] === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
                         className={`option-btn ${isSelected ? 'selected' : ''}`}
-                        onClick={() => SeleccionarOpcion(enc.id, opt.id)}
+                        onClick={() => seleccionarOpcion(enc.id, opt.id)}
                       >
                         <span className="radio-circle"></span>
                         {opt.texto}
@@ -94,7 +119,7 @@ export default function App() {
             <button
               className="submit-btn"
               disabled={Object.keys(respuestas).length < encuestas.length}
-              onClick={EnviarVotos}
+              onClick={enviarVotos}
             >
               {Object.keys(respuestas).length < encuestas.length
                 ? `Responde todas las preguntas (${Object.keys(respuestas).length}/${encuestas.length})`
@@ -103,10 +128,10 @@ export default function App() {
           </div>
         ) : (
           <div className="survey-card">
-            <div className="success-badge">✓ Voto registrado</div>
+            <div className="success-badge">✓ ¡Gracias por tu participación!</div>
             <h2>Resultados en Tiempo Real</h2>
             <p className="subtitle">
-              Estadísticas globales acumuladas en el servidor.
+              Porcentaje global de respuestas registradas en el servidor.
             </p>
 
             {encuestas.map((enc, idx) => {
@@ -145,14 +170,14 @@ export default function App() {
             })}
 
             <button className="secondary-btn" onClick={() => setEnviado(false)}>
-              Volver a Votar / Ver Cuestionario
+              Volver a responder
             </button>
           </div>
         )}
       </main>
 
       <footer className="footer">
-        <p>Sistema de Encuestas Tatiana • Desplegado en Render</p>
+        <p>Sistema de Encuestas • Desplegado en Render</p>
       </footer>
     </div>
   );
