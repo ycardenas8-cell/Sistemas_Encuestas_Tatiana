@@ -4,16 +4,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://sistemas-encuestas-tati
 
 export default function App() {
   const [encuestas, setEncuestas] = useState([]);
-  const [respuestas, setRespuestas] = useState({}); // { preguntaId: [opcionId1, opcionId2] }
+  const [respuestas, setRespuestas] = useState({});
   const [cargando, setCargando] = useState(true);
   const [enviado, setEnviado] = useState(false);
   const [modoAdmin, setModoAdmin] = useState(false);
   const [modalData, setModalData] = useState(null);
-
-  // Formulario de nueva pregunta
-  const [nuevaPreguntaTexto, setNuevaPreguntaTexto] = useState('');
-  const [opcion1, setOpcion1] = useState('');
-  const [opcion2, setOpcion2] = useState('');
 
   const cargarDatos = () => {
     fetch(`${API_URL}/encuesta`)
@@ -21,196 +16,565 @@ export default function App() {
       .then((data) => {
         setEncuestas(data);
         setCargando(false);
+      })
+      .catch((err) => {
+        console.error('Error al obtener encuestas:', err);
+        setCargando(false);
       });
   };
 
-  useEffect(() => { cargarDatos(); }, []);
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
-  const toggleOpcion = (preguntaId, opcionId) => {
-    setRespuestas((prev) => {
-      const seleccionadas = prev[preguntaId] || [];
-      const existe = seleccionadas.includes(opcionId);
-      const nuevas = existe 
-        ? seleccionadas.filter((id) => id !== opcionId)
-        : [...seleccionadas, opcionId];
-      return { ...prev, [preguntaId]: nuevas };
-    });
+  const seleccionarOpcion = (preguntaId, opcionId) => {
+    setRespuestas((prev) => ({ ...prev, [preguntaId]: opcionId }));
   };
 
   const enviarVotos = async () => {
     try {
       let ultimosDatos = encuestas;
-      for (const [preguntaId, opcionesIds] of Object.entries(respuestas)) {
-        if (opcionesIds.length > 0) {
-          const res = await fetch(`${API_URL}/votar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ preguntaId: Number(preguntaId), opcionesIds }),
-          });
-          ultimosDatos = await res.json();
-        }
+      for (const [preguntaId, opcionId] of Object.entries(respuestas)) {
+        const res = await fetch(`${API_URL}/votar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preguntaId: Number(preguntaId), opcionId }),
+        });
+        ultimosDatos = await res.json();
       }
       setEncuestas(ultimosDatos);
       setEnviado(true);
     } catch (err) {
-      alert('Error enviando respuestas.');
+      console.error('Error enviando respuestas:', err);
+      alert('Error de conexión al votar.');
     }
   };
 
-  const agregarPreguntaAdmin = async (e) => {
-    e.preventDefault();
-    if (!nuevaPreguntaTexto || !opcion1 || !opcion2) return alert('Completa los campos obligatorios');
+  const reiniciarVotos = async () => {
+    const pin = prompt('Introduce el PIN de Administrador (Default: 1234):');
+    if (!pin) return;
 
     try {
-      const res = await fetch(`${API_URL}/crear-pregunta`, {
+      const res = await fetch(`${API_URL}/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin: '1234',
-          pregunta: nuevaPreguntaTexto,
-          opciones: [{ texto: opcion1 }, { texto: opcion2 }]
-        }),
+        body: JSON.stringify({ pin }),
       });
       const data = await res.json();
       if (res.ok) {
         setEncuestas(data.encuestas);
-        setNuevaPreguntaTexto('');
-        setOpcion1('');
-        setOpcion2('');
-        alert('¡Pregunta creada exitosamente!');
+        alert('Se han reiniciado todos los contadores de votos.');
+      } else {
+        alert(data.error);
       }
     } catch (err) {
-      alert('Error creando pregunta.');
+      alert('Error al intentar reiniciar contadores.');
     }
   };
 
-  if (cargando) return <div style={{ color: '#10b981', textAlign: 'center', marginTop: '100px' }}>Cargando...</div>;
+  if (cargando) {
+    return (
+      <div style={styles.centerContainer}>
+        <div style={styles.loadingText}>Cargando sistema de encuestas...</div>
+      </div>
+    );
+  }
+
+  const totalParticipantes = encuestas.length > 0 
+    ? encuestas[0].opciones.reduce((a, b) => a + b.votos, 0)
+    : 0;
 
   return (
     <div style={styles.pageBackground}>
       <div style={styles.container}>
+        
+        {/* Switch de Modo */}
         <div style={styles.topBar}>
-          <button onClick={() => setModoAdmin(!modoAdmin)} style={styles.adminBtn}>
-            {modoAdmin ? '👤 Vista Usuario' : '⚙️ Modo Administrador'}
+          <button 
+            onClick={() => setModoAdmin(!modoAdmin)} 
+            style={modoAdmin ? styles.adminActiveBtn : styles.adminBtn}
+          >
+            {modoAdmin ? '👤 Cambiar a Vista Usuario' : '⚙️ Modo Administrador'}
           </button>
         </div>
 
-        <header style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <h1 style={{ color: '#fff' }}>{modoAdmin ? 'Panel de Control Admin' : 'Evaluación & Tendencias Web'}</h1>
+        {/* Encabezado */}
+        <header style={styles.header}>
+          <span style={styles.badge}>
+            {modoAdmin ? 'Panel de Control - Administrador' : 'Plataforma Interactiva Full Stack'}
+          </span>
+          <h1 style={styles.title}>
+            {modoAdmin ? 'Métricas & Métricas de Votación' : 'Evaluación & Tendencias Web'}
+          </h1>
+          <p style={styles.subtitle}>
+            {modoAdmin 
+              ? 'Dashboard en tiempo real con analíticas de respuestas acumuladas.' 
+              : 'Selecciona tus preferencias técnicas. Haz clic en 📖 para ver detalles de cada opción.'}
+          </p>
         </header>
 
+        {/* VISTA ADMINISTRADOR */}
         {modoAdmin ? (
           <div style={styles.card}>
-            {/* Formulario de Creación */}
-            <form onSubmit={agregarPreguntaAdmin} style={styles.formBox}>
-              <h3 style={{ color: '#10b981', marginTop: 0 }}>➕ Crear Nueva Pregunta</h3>
-              <input
-                type="text"
-                placeholder="Escribe el título de la pregunta..."
-                value={nuevaPreguntaTexto}
-                onChange={(e) => setNuevaPreguntaTexto(e.target.value)}
-                style={styles.input}
-              />
-              <input
-                type="text"
-                placeholder="Opción 1"
-                value={opcion1}
-                onChange={(e) => setOpcion1(e.target.value)}
-                style={styles.input}
-              />
-              <input
-                type="text"
-                placeholder="Opción 2"
-                value={opcion2}
-                onChange={(e) => setOpcion2(e.target.value)}
-                style={styles.input}
-              />
-              <button type="submit" style={styles.addBtn}>Guardar Pregunta</button>
-            </form>
-
-            <h2 style={{ color: '#fff', marginTop: '30px' }}>Resultados Actuales</h2>
-            {encuestas.map((enc, idx) => (
-              <div key={enc.id} style={styles.questionCard}>
-                <h4 style={{ color: '#e2e8f0' }}>{idx + 1}. {enc.pregunta}</h4>
-                {enc.opciones.map(opt => (
-                  <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1', marginBottom: '6px' }}>
-                    <span>{opt.texto}</span>
-                    <strong style={{ color: '#10b981' }}>{opt.votos} votos</strong>
-                  </div>
-                ))}
+            <div style={styles.adminStatsBar}>
+              <div>
+                <span style={styles.statLabel}>Total Participantes:</span>
+                <span style={styles.statValue}>{totalParticipantes} usuario(s)</span>
               </div>
-            ))}
+              <button onClick={reiniciarVotos} style={styles.resetBtn}>
+                🗑️ Reiniciar Contadores
+              </button>
+            </div>
+
+            <h2 style={styles.cardTitle}>Resultados Consolidados</h2>
+
+            {encuestas.map((enc, idx) => {
+              const totalVotos = enc.opciones.reduce((a, b) => a + b.votos, 0);
+              return (
+                <div key={enc.id} style={styles.questionCard}>
+                  <h3 style={styles.questionText}>
+                    <span style={styles.numberBadge}>{idx + 1}</span> {enc.pregunta}
+                  </h3>
+                  {enc.opciones.map((opt) => {
+                    const porcentaje = totalVotos > 0 ? Math.round((opt.votos / totalVotos) * 100) : 0;
+                    return (
+                      <div key={opt.id} style={{ marginBottom: '14px' }}>
+                        <div style={styles.resultHeader}>
+                          <span style={{ fontWeight: '500' }}>{opt.texto}</span>
+                          <span style={{ fontWeight: 'bold', color: '#10b981' }}>
+                            {opt.votos} voto(s) ({porcentaje}%)
+                          </span>
+                        </div>
+                        <div style={styles.progressBg}>
+                          <div style={{ ...styles.progressFill, width: `${porcentaje}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         ) : (
-          /* Vista Usuario con Selección Múltiple */
-          <div style={styles.card}>
+          /* VISTA USUARIO */
+          <div>
             {!enviado ? (
-              <>
-                <p style={{ color: '#94a3b8' }}>Puedes seleccionar varias opciones por pregunta (Casillas de verificación):</p>
+              <div style={styles.card}>
+                <h2 style={styles.cardTitle}>Cuestionario Técnico (5 Preguntas)</h2>
+                <p style={styles.cardSub}>Elige una opción para cada pregunta para enviar tu respuesta.</p>
+
                 {encuestas.map((enc, idx) => (
                   <div key={enc.id} style={styles.questionCard}>
-                    <h3 style={{ color: '#e2e8f0', margin: '0 0 12px 0' }}>{idx + 1}. {enc.pregunta}</h3>
-                    {enc.opciones.map((opt) => {
-                      const seleccionada = (respuestas[enc.id] || []).includes(opt.id);
-                      return (
-                        <div key={opt.id} style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => toggleOpcion(enc.id, opt.id)}
-                            style={{
-                              ...styles.checkboxBtn,
-                              ...(seleccionada ? styles.checkboxActive : {})
-                            }}
-                          >
-                            {seleccionada ? '☑ ' : '☐ '} {opt.texto}
-                          </button>
-                          <button type="button" onClick={() => setModalData(opt)} style={styles.infoBtn}>📖 Info</button>
-                        </div>
-                      );
-                    })}
+                    <h3 style={styles.questionText}>
+                      <span style={styles.numberBadge}>{idx + 1}</span> {enc.pregunta}
+                    </h3>
+
+                    <div style={styles.optionsContainer}>
+                      {enc.opciones.map((opt) => {
+                        const estaSeleccionada = respuestas[enc.id] === opt.id;
+                        return (
+                          <div key={opt.id} style={styles.optionRow}>
+                            <button
+                              type="button"
+                              onClick={() => seleccionarOpcion(enc.id, opt.id)}
+                              style={{
+                                ...styles.greenBtn,
+                                ...(estaSeleccionada ? styles.greenBtnActive : {})
+                              }}
+                            >
+                              <span style={styles.radioDot(estaSeleccionada)}></span>
+                              {opt.texto}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setModalData(opt)}
+                              style={styles.infoBtn}
+                              title="Ver información técnica"
+                            >
+                              📖 Info
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
-                <button onClick={enviarVotos} style={styles.submitBtn}>✓ Enviar Respuestas</button>
-              </>
+
+                <button
+                  onClick={enviarVotos}
+                  disabled={Object.keys(respuestas).length < encuestas.length}
+                  style={{
+                    ...styles.submitBtn,
+                    ...(Object.keys(respuestas).length < encuestas.length ? styles.submitBtnDisabled : {})
+                  }}
+                >
+                  {Object.keys(respuestas).length < encuestas.length
+                    ? `Completa todas las preguntas (${Object.keys(respuestas).length}/${encuestas.length})`
+                    : '✓ Enviar Mis Respuestas'}
+                </button>
+              </div>
             ) : (
-              <div style={{ textAlign: 'center' }}>
-                <h2 style={{ color: '#10b981' }}>¡Respuestas Guardadas!</h2>
-                <button onClick={() => { setEnviado(false); setRespuestas({}); }} style={styles.secondaryBtn}>Volver a responder</button>
+              <div style={styles.card}>
+                <div style={styles.successTag}>✓ ¡Voto Registrado con Éxito!</div>
+                <h2 style={styles.cardTitle}>¡Gracias por participar!</h2>
+                <p style={styles.cardSub}>Tu opinión ha sido almacenada en el servidor en tiempo real.</p>
+
+                <button onClick={() => { setEnviado(false); setRespuestas({}); }} style={styles.secondaryBtn}>
+                  🔄 Responder nuevamente
+                </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Modal Informativo */}
+        {/* MODAL INFORMATIVO */}
         {modalData && (
           <div style={styles.modalOverlay} onClick={() => setModalData(null)}>
             <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-              <h3 style={{ color: '#10b981', marginTop: 0 }}>{modalData.texto}</h3>
-              <p style={{ color: '#e2e8f0' }}>{modalData.resumen}</p>
-              <button style={styles.addBtn} onClick={() => setModalData(null)}>Cerrar</button>
+              <div style={styles.modalHeader}>
+                <h3 style={styles.modalTitle}>{modalData.texto}</h3>
+                <button style={styles.closeBtn} onClick={() => setModalData(null)}>✕</button>
+              </div>
+              <p style={styles.modalResumen}>{modalData.resumen}</p>
+              <div style={styles.modalUsoBox}>
+                <strong>Casos de Uso Principales:</strong>
+                <p style={{ margin: '4px 0 0 0', color: '#cbd5e1' }}>{modalData.usos}</p>
+              </div>
+              <a
+                href={modalData.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.docOfficialLink}
+              >
+                🌐 Ir a la Documentación Oficial ↗
+              </a>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
 }
 
 const styles = {
-  pageBackground: { backgroundColor: '#0f172a', minHeight: '100vh', padding: '30px 20px', fontFamily: 'sans-serif' },
-  container: { maxWidth: '720px', margin: '0 auto' },
-  topBar: { display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' },
-  adminBtn: { backgroundColor: '#1e293b', color: '#10b981', border: '1px solid #10b981', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
-  card: { backgroundColor: '#1e293b', borderRadius: '16px', padding: '24px', border: '1px solid #334155' },
-  questionCard: { backgroundColor: '#0f172a', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' },
-  checkboxBtn: { flex: 1, padding: '10px 14px', backgroundColor: '#1e293b', border: '2px solid #059669', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' },
-  checkboxActive: { backgroundColor: '#059669', fontWeight: 'bold' },
-  infoBtn: { backgroundColor: '#064e3b', color: '#34d399', border: '1px solid #059669', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer' },
-  submitBtn: { width: '100%', padding: '14px', backgroundColor: '#10b981', color: '#0f172a', border: 'none', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' },
-  secondaryBtn: { padding: '12px 20px', backgroundColor: 'transparent', color: '#10b981', border: '1px solid #10b981', borderRadius: '8px', cursor: 'pointer', marginTop: '15px' },
-  formBox: { backgroundColor: '#0f172a', padding: '16px', borderRadius: '12px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: '10px' },
-  input: { padding: '10px', borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#fff' },
-  addBtn: { padding: '10px', backgroundColor: '#10b981', color: '#0f172a', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  modalCard: { backgroundColor: '#1e293b', padding: '24px', borderRadius: '12px', maxWidth: '400px', width: '100%' }
+  pageBackground: {
+    backgroundColor: '#0f172a',
+    minHeight: '100vh',
+    padding: '30px 20px',
+    fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    color: '#f8fafc',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  container: {
+    width: '100%',
+    maxWidth: '720px',
+  },
+  centerContainer: {
+    backgroundColor: '#0f172a',
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#10b981',
+  },
+  loadingText: {
+    fontSize: '1.2rem',
+    fontWeight: 'bold',
+  },
+  topBar: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginBottom: '15px',
+  },
+  adminBtn: {
+    backgroundColor: '#1e293b',
+    color: '#94a3b8',
+    border: '1px solid #334155',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  adminActiveBtn: {
+    backgroundColor: '#3b82f6',
+    color: '#ffffff',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  },
+  header: {
+    textAlign: 'center',
+    marginBottom: '25px',
+  },
+  badge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    color: '#10b981',
+    border: '1px solid #10b981',
+    padding: '4px 12px',
+    borderRadius: '20px',
+    fontSize: '0.825rem',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: '2rem',
+    margin: '10px 0 6px 0',
+    color: '#ffffff',
+  },
+  subtitle: {
+    color: '#94a3b8',
+    fontSize: '0.95rem',
+  },
+  card: {
+    backgroundColor: '#1e293b',
+    borderRadius: '16px',
+    padding: '24px',
+    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
+    border: '1px solid #334155',
+  },
+  cardTitle: {
+    fontSize: '1.3rem',
+    margin: '0 0 4px 0',
+    color: '#f8fafc',
+  },
+  cardSub: {
+    color: '#94a3b8',
+    fontSize: '0.875rem',
+    marginBottom: '20px',
+  },
+  questionCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '16px',
+    border: '1px solid #334155',
+  },
+  questionText: {
+    fontSize: '1rem',
+    color: '#e2e8f0',
+    marginTop: 0,
+    marginBottom: '12px',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  numberBadge: {
+    backgroundColor: '#10b981',
+    color: '#0f172a',
+    borderRadius: '50%',
+    width: '22px',
+    height: '22px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    marginRight: '10px',
+  },
+  optionsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  optionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  greenBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '12px 16px',
+    backgroundColor: '#1e293b',
+    border: '2px solid #059669',
+    borderRadius: '10px',
+    color: '#ecfdf5',
+    fontSize: '0.925rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  greenBtnActive: {
+    backgroundColor: '#059669',
+    color: '#ffffff',
+    fontWeight: 'bold',
+    boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)',
+  },
+  radioDot: (active) => ({
+    width: '14px',
+    height: '14px',
+    borderRadius: '50%',
+    border: active ? '2px solid #ffffff' : '2px solid #10b981',
+    backgroundColor: active ? '#ffffff' : 'transparent',
+    marginRight: '12px',
+    display: 'inline-block',
+  }),
+  infoBtn: {
+    color: '#34d399',
+    backgroundColor: '#064e3b',
+    padding: '10px 14px',
+    borderRadius: '8px',
+    border: '1px solid #059669',
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  submitBtn: {
+    width: '100%',
+    padding: '14px',
+    backgroundColor: '#10b981',
+    color: '#0f172a',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginTop: '10px',
+  },
+  submitBtnDisabled: {
+    backgroundColor: '#334155',
+    color: '#64748b',
+    cursor: 'not-allowed',
+  },
+  successTag: {
+    display: 'inline-block',
+    backgroundColor: '#064e3b',
+    color: '#34d399',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+  },
+  resultHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '0.875rem',
+    marginBottom: '4px',
+  },
+  progressBg: {
+    backgroundColor: '#1e293b',
+    borderRadius: '8px',
+    height: '10px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    backgroundColor: '#10b981',
+    height: '100%',
+    borderRadius: '8px',
+    transition: 'width 0.5s ease',
+  },
+  secondaryBtn: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: 'transparent',
+    color: '#10b981',
+    border: '1px solid #10b981',
+    borderRadius: '10px',
+    fontSize: '0.95rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginTop: '20px',
+  },
+  adminStatsBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    padding: '14px 18px',
+    borderRadius: '10px',
+    border: '1px solid #334155',
+    marginBottom: '20px',
+  },
+  statLabel: {
+    color: '#94a3b8',
+    marginRight: '8px',
+    fontSize: '0.9rem',
+  },
+  statValue: {
+    color: '#10b981',
+    fontWeight: 'bold',
+    fontSize: '1rem',
+  },
+  resetBtn: {
+    backgroundColor: '#7f1d1d',
+    color: '#fca5a5',
+    border: '1px solid #991b1b',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    fontSize: '0.825rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    zIndex: 1000,
+  },
+  modalCard: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '16px',
+    padding: '24px',
+    maxWidth: '480px',
+    width: '100%',
+    boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: '1.3rem',
+    color: '#10b981',
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#94a3b8',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+  },
+  modalResumen: {
+    color: '#e2e8f0',
+    fontSize: '0.95rem',
+    lineHeight: '1.5',
+    marginBottom: '16px',
+  },
+  modalUsoBox: {
+    backgroundColor: '#0f172a',
+    padding: '12px',
+    borderRadius: '8px',
+    border: '1px solid #334155',
+    fontSize: '0.875rem',
+    marginBottom: '20px',
+  },
+  docOfficialLink: {
+    display: 'block',
+    textAlign: 'center',
+    backgroundColor: '#10b981',
+    color: '#0f172a',
+    padding: '12px',
+    borderRadius: '8px',
+    textDecoration: 'none',
+    fontWeight: 'bold',
+    fontSize: '0.9rem',
+  },
 };
