@@ -1,42 +1,34 @@
-const express = require('express');
-const cors = require('cors');
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middlewares
-app.use(cors());
-app.use(express.json());
-
-// Datos de la encuesta en memoria
-let encuesta = {
-  pregunta: '¿Cuál es tu lenguaje o entorno favorito para aprender web?',
-  opciones: [
-    { id: 1, texto: 'JavaScript / Node.js', votos: 0 },
-    { id: 2, texto: 'Python', votos: 0 },
-    { id: 3, texto: 'Java / C#', votos: 0 }
-  ]
-};
-
-// Ruta 1: Obtener la encuesta y sus resultados
-app.get('/api/encuesta', (req, res) => {
-  res.json(encuesta);
-});
-
-// Ruta 2: Registrar un voto
-app.post('/api/votar', (req, res) => {
-  const { opcionId } = req.body;
-  const opcion = encuesta.opciones.find(o => o.id === parseInt(opcionId));
-
-  if (!opcion) {
-    return res.status(404).json({ error: 'Opción no encontrada' });
+const encuestas = [
+  {
+    id: 1,
+    pregunta: "¿Cuál es tu entorno principal para desarrollo web?",
+    opciones: [
+      { id: "opt1", texto: "JavaScript / Node.js", votos: 0 },
+      { id: "opt2", texto: "Python", votos: 0 },
+      { id: "opt3", texto: "Java / C#", votos: 0 }
+    ]
+  },
+  {
+    id: 2,
+    pregunta: "¿Qué framework frontend prefieres?",
+    opciones: [
+      { id: "opt1", texto: "React", votos: 0 },
+      { id: "opt2", texto: "Vue.js", votos: 0 },
+      { id: "opt3", texto: "Angular", votos: 0 }
+    ]
   }
+];
 
-  opcion.votos += 1;
-  res.json({ mensaje: 'Voto registrado con éxito', encuesta });
-});
+// Endpoint GET todas las preguntas
+app.get('/api/encuesta', (req, res) => res.json(encuestas));
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor de encuestas corriendo en el puerto ${PORT}`);
+// Endpoint POST voto por pregunta y opción
+app.post('/api/votar', (req, res) => {
+  const { preguntaId, opcionId } = req.body;
+  const encuesta = encuestas.find(e => e.id === preguntaId);
+  if (encuesta) {
+    const opcion = encuesta.opciones.find(o => o.id === opcionId);
+    if (opcion) opcion.votos++;
+  }
+  res.json(encuestas);
 });

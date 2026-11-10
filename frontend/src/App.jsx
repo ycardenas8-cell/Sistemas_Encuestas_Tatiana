@@ -1,97 +1,159 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-function App() {
-  const [encuesta, setEncuesta] = useState(null);
-  const [opcionSeleccionada, setOpcionSeleccionada] = useState(null);
-  const [votoRegistrado, setVotoRegistrado] = useState(false);
-
-  const cargarEncuesta = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/encuesta`);
-      setEncuesta(res.data);
-    } catch (error) {
-      console.error('Error al obtener la encuesta:', error);
-    }
-  };
+export default function App() {
+  const [encuestas, setEncuestas] = useState([]);
+  const [respuestas, setRespuestas] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [enviado, setEnviado] = useState(false);
 
   useEffect(() => {
-    cargarEncuesta();
+    fetch(`${API_URL}/encuesta`)
+      .then((res) => res.json())
+      .then((data) => {
+        setEncuestas(data);
+        setCargando(false);
+      })
+      .catch((err) => console.error('Error cargando encuestas:', err));
   }, []);
 
-  const handleVotar = async (e) => {
-    e.preventDefault();
-    if (!opcionSeleccionada) return alert('Por favor selecciona una opción');
-
-    try {
-      const res = await axios.post(`${API_URL}/votar`, { opcionId: opcionSeleccionada });
-      setEncuesta(res.data.encuesta);
-      setVotoRegistrado(true);
-    } catch (error) {
-      console.error('Error al enviar el voto:', error);
-    }
+  const SeleccionarOpcion = (preguntaId, opcionId) => {
+    setRespuestas((prev) => ({ ...prev, [preguntaId]: opcionId }));
   };
 
-  if (!encuesta) return <div style={{ padding: '20px' }}>Cargando encuesta...</div>;
+  const EnviarVotos = async () => {
+    let ultimosDatos = encuestas;
+    for (const [preguntaId, opcionId] of Object.entries(respuestas)) {
+      const res = await fetch(`${API_URL}/votar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preguntaId: Number(preguntaId), opcionId }),
+      });
+      ultimosDatos = await res.json();
+    }
+    setEncuestas(ultimosDatos);
+    setEnviado(true);
+  };
 
-  const totalVotos = encuesta.opciones.reduce((acc, curr) => acc + curr.votos, 0);
+  if (cargando) {
+    return (
+      <div className="container center">
+        <div className="spinner"></div>
+        <p>Cargando sistema de encuestas...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'Arial, sans-serif', border: '1px solid #ddd', borderRadius: '8px', color: '#333', background: '#fff' }}>
-      <h2>{encuesta.pregunta}</h2>
+    <div className="app-layout">
+      {/* Header profesional */}
+      <header className="header">
+        <div className="header-content">
+          <span className="badge">Plataforma Interactiva</span>
+          <h1>Sistema de Encuestas Full Stack</h1>
+          <p>
+            Encuesta académica sobre tecnologías web y herramientas de desarrollo.
+          </p>
+        </div>
+      </header>
 
-      {!votoRegistrado ? (
-        <form onSubmit={handleVotar} style={{ marginTop: '20px' }}>
-          {encuesta.opciones.map((opcion) => (
-            <div key={opcion.id} style={{ marginBottom: '10px', textAlign: 'left' }}>
-              <label style={{ fontSize: '16px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="encuesta"
-                  value={opcion.id}
-                  onChange={() => setOpcionSeleccionada(opcion.id)}
-                  style={{ marginRight: '10px' }}
-                />
-                {opcion.texto}
-              </label>
-            </div>
-          ))}
-          <button
-            type="submit"
-            style={{ marginTop: '15px', padding: '10px 20px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Votar
-          </button>
-        </form>
-      ) : (
-        <div style={{ marginTop: '20px' }}>
-          <h3>Resultados en tiempo real:</h3>
-          {encuesta.opciones.map((opcion) => {
-            const porcentaje = totalVotos > 0 ? Math.round((opcion.votos / totalVotos) * 100) : 0;
-            return (
-              <div key={opcion.id} style={{ marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                  <span>{opcion.texto}</span>
-                  <span>{opcion.votos} voto(s) ({porcentaje}%)</span>
-                </div>
-                <div style={{ width: '100%', background: '#eee', height: '20px', borderRadius: '10px', overflow: 'hidden' }}>
-                  <div style={{ width: `${porcentaje}%`, background: '#28a745', height: '100%' }}></div>
+      {/* Contenido principal */}
+      <main className="main-content">
+        {!enviado ? (
+          <div className="survey-card">
+            <h2>Cuestionario Técnico</h2>
+            <p className="subtitle">
+              Responde a las siguientes preguntas y consulta los resultados globales.
+            </p>
+
+            {encuestas.map((enc, idx) => (
+              <div key={enc.id} className="question-block">
+                <p className="question-title">
+                  <span className="q-number">{idx + 1}.</span> {enc.pregunta}
+                </p>
+                <div className="options-grid">
+                  {enc.opciones.map((opt) => {
+                    constisSelected = respuestas[enc.id] === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`option-btn ${isSelected ? 'selected' : ''}`}
+                        onClick={() => SeleccionarOpcion(enc.id, opt.id)}
+                      >
+                        <span className="radio-circle"></span>
+                        {opt.texto}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-          <button
-            onClick={() => setVotoRegistrado(false)}
-            style={{ marginTop: '15px', padding: '8px 15px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Volver a votar
-          </button>
-        </div>
-      )}
+            ))}
+
+            <button
+              className="submit-btn"
+              disabled={Object.keys(respuestas).length < encuestas.length}
+              onClick={EnviarVotos}
+            >
+              {Object.keys(respuestas).length < encuestas.length
+                ? `Responde todas las preguntas (${Object.keys(respuestas).length}/${encuestas.length})`
+                : 'Enviar Respuestas'}
+            </button>
+          </div>
+        ) : (
+          <div className="survey-card">
+            <div className="success-badge">✓ Voto registrado</div>
+            <h2>Resultados en Tiempo Real</h2>
+            <p className="subtitle">
+              Estadísticas globales acumuladas en el servidor.
+            </p>
+
+            {encuestas.map((enc, idx) => {
+              const totalVotos = enc.opciones.reduce((a, b) => a + b.votos, 0);
+              return (
+                <div key={enc.id} className="result-block">
+                  <p className="question-title">
+                    <span className="q-number">{idx + 1}.</span> {enc.pregunta}
+                  </p>
+                  <div className="results-list">
+                    {enc.opciones.map((opt) => {
+                      const porcentaje =
+                        totalVotos > 0
+                          ? Math.round((opt.votos / totalVotos) * 100)
+                          : 0;
+                      return (
+                        <div key={opt.id} className="result-item">
+                          <div className="result-header">
+                            <span>{opt.texto}</span>
+                            <span className="vote-count">
+                              {opt.votos} voto(s) ({porcentaje}%)
+                            </span>
+                          </div>
+                          <div className="progress-bar-bg">
+                            <div
+                              className="progress-bar-fill"
+                              style={{ width: `${porcentaje}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            <button className="secondary-btn" onClick={() => setEnviado(false)}>
+              Volver a Votar / Ver Cuestionario
+            </button>
+          </div>
+        )}
+      </main>
+
+      <footer className="footer">
+        <p>Sistema de Encuestas Tatiana • Desplegado en Render</p>
+      </footer>
     </div>
   );
 }
-
-export default App;
