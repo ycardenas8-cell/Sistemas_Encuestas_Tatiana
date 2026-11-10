@@ -1,7 +1,14 @@
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
 const encuestas = [
   {
     id: 1,
-    pregunta: "¿Cuál es tu entorno principal para desarrollo web?",
+    pregunta: "¿Cuál es tu entorno favorito para aprender desarrollo web?",
     opciones: [
       { id: "opt1", texto: "JavaScript / Node.js", votos: 0 },
       { id: "opt2", texto: "Python", votos: 0 },
@@ -15,6 +22,15 @@ const encuestas = [
       { id: "opt1", texto: "React", votos: 0 },
       { id: "opt2", texto: "Vue.js", votos: 0 },
       { id: "opt3", texto: "Angular", votos: 0 }
+    ]
+  },
+  {
+    id: 3,
+    pregunta: "¿Qué base de datos utilizas con mayor frecuencia?",
+    opciones: [
+      { id: "opt1", texto: "PostgreSQL / MySQL", votos: 0 },
+      { id: "opt2", texto: "MongoDB", votos: 0 },
+      { id: "opt3", texto: "SQLite / Redis", votos: 0 }
     ]
   }
 ];
@@ -31,4 +47,9 @@ app.post('/api/votar', (req, res) => {
     if (opcion) opcion.votos++;
   }
   res.json(encuestas);
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Servidor backend corriendo en puerto ${PORT}`);
 });
